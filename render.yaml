@@ -9,3 +9,13 @@ services:
         value: .
       - key: KMP_DUPLICATE_LIB_OK
         value: "TRUE"
+      - key: MALLOC_ARENA_MAX
+        value: "2"
+      - key: OMP_NUM_THREADS
+        value: "1"
+      - key: MKL_NUM_THREADS
+        value: "1"
+      - key: OPENBLAS_NUM_THREADS
+        value: "1"
+      - key: PYTHONMALLOC
+        value: "malloc"

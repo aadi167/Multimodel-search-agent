@@ -36,6 +36,10 @@ class CLIPEncoder:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"Using device: {self.device}")
 
+        if self.device == "cpu":
+            torch.set_num_threads(1)
+            torch.set_grad_enabled(False)
+
         self.model = CLIPModel.from_pretrained(settings.CLIP_MODEL_NAME)
         self.processor = CLIPProcessor.from_pretrained(settings.CLIP_MODEL_NAME)
         self.model.to(self.device)
