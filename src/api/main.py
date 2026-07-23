@@ -7,9 +7,9 @@ import io
 import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 from contextlib import asynccontextmanager
-from typing import List
+from typing import List, Optional
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from PIL import Image
@@ -33,8 +33,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Multimodal Search Engine",
-    description="Search images using text or other images — powered by CLIP + FAISS",
+    title="Multimodal AI Search Engine API",
+    description="CLIP-powered vector search API for text, image, and hybrid queries.",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -49,19 +49,20 @@ app.add_middleware(
 
 
 @app.get("/health")
-async def health():
+def health():
     return {"status": "healthy", "engine_ready": search_engine.is_ready}
 
 
 @app.get("/index/stats", response_model=IndexStatsResponse)
-async def index_stats():
+@app.get("/stats", response_model=IndexStatsResponse)
+def index_stats():
     """Return statistics about the loaded image index."""
     return search_engine.get_stats()
 
 
 # ── Text → Images ─────────────────────────────────────────────────────────
-@app.post("/search/text")
-async def search_by_text(request: TextSearchRequest):
+@app.post("/search/text", response_model=SearchResponse)
+def search_text(req: TextSearchRequest):
     """
     Search images using a natural language description.
 
@@ -75,9 +76,9 @@ async def search_by_text(request: TextSearchRequest):
 
     try:
         result = search_engine.search_by_text(
-            query=request.query,
-            top_k=request.top_k,
-            include_base64=request.include_base64,
+            query=req.query,
+            top_k=req.top_k,
+            include_base64=req.include_base64,
         )
         return result
     except Exception as e:
@@ -86,11 +87,11 @@ async def search_by_text(request: TextSearchRequest):
 
 
 # ── Image → Images ─────────────────────────────────────────────────────────
-@app.post("/search/image")
+@app.post("/search/image", response_model=SearchResponse)
 async def search_by_image(
     file: UploadFile = File(..., description="Query image to find similar images"),
-    top_k: int = Query(default=5, ge=1, le=20),
-    include_base64: bool = Query(default=False),
+    top_k: int = Form(default=5),
+    include_base64: bool = Form(default=False),
 ):
     """
     Upload an image to find visually similar images (reverse image search).
@@ -119,6 +120,7 @@ async def search_by_image(
 # ── Zero-shot classification ────────────────────────────────────────────────
 @app.post("/classify", response_model=ClassifyResponse)
 async def classify_image(
+    request: Request,
     file: UploadFile = File(...),
     labels: str = Form(default="cat,dog,car,person,food,building,nature",
                        description="Comma-separated category names"),
@@ -131,6 +133,10 @@ async def classify_image(
     """
     if not search_engine.is_ready:
         raise HTTPException(status_code=503, detail="Search engine not ready.")
+
+    form_data = await request.form()
+    if "labels" in form_data and not str(form_data["labels"]).strip():
+        raise HTTPException(status_code=400, detail="Provide at least one label.")
 
     try:
         contents = await file.read()
@@ -150,7 +156,7 @@ async def classify_image(
 
 
 # ── Hybrid search ───────────────────────────────────────────────────────────
-@app.post("/search/hybrid")
+@app.post("/search/hybrid", response_model=SearchResponse)
 async def hybrid_search(
     file: UploadFile = File(..., description="Reference image"),
     text_query: str = Form(..., description="Text to refine the search"),
@@ -185,4 +191,6 @@ async def hybrid_search(
 
 
 if __name__ == "__main__":
-    uvicorn.run("src.api.main:app", host="0.0.0.0", port=8000, reload=True)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("src.api.main:app", host="0.0.0.0", port=port, reload=False)
+

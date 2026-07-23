@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class TextSearchRequest(BaseModel):
-    query: str = Field(..., min_length=1, max_length=500, example="a red sports car at sunset")
+    query: str = Field(..., min_length=1, max_length=500, json_schema_extra={"example": "a red sports car at sunset"})
     top_k: int = Field(default=5, ge=1, le=20)
     include_base64: bool = Field(default=False)
 
